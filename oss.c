@@ -40,7 +40,6 @@ int vbose = 0;
 int sipcid;
 int tousr;
 int tooss;
-int verb = 0;
 int pcap = 18;
 int plist[18];
 pid_t pids[18];
@@ -49,6 +48,7 @@ int eventualprocesstermination = 0;
 int grantedresource = 0;
 int deadlockdetectcount = 0;
 int deadlocktermination = 0;
+int pcount = 0;
 /* END ================================================================= */
 
 
@@ -72,24 +72,20 @@ void killtime(int, siginfo_t *, void *);
 
 void shminit();
 void msginit();
-// void pcbinit();
 void resinit();
 void ticinit();
 
 void moppingup();
 void manager(int);
 
-void timeinc(simclock *, int);
 void clockinc(simclock *, int, int);
 int timecomparison(simclock *, simclock *);
 
 void overlay(int);
 int findaseat();
-// int findapid(int);
 int resourceallocator(int, int);
 void resourcedeallocator(int, int);
 void getresource(int, int, int);
-
 /* END ================================================================= */
 
 
@@ -120,7 +116,6 @@ int main(int argc, char *argv[])
 
 	shminit();
 	msginit();
-	// pcbinit();
 	resinit();
 	ticinit();
 
@@ -139,6 +134,7 @@ void manager(int vbose)
 {
 	int status;
 	int msglen;
+	int temp;
     int ecount = 0;
 	int acount = 0;
 	int lcount = 0;
@@ -154,6 +150,13 @@ void manager(int vbose)
 	   clock, which is, at this point, initiated to { 0, 0 }     */
 	int nextfork = (rand() % (500000000 - 1000000 + 1)) + 1000000;
 	clockinc(&forktime, 0, nextfork);
+
+	if(vbose == 1)
+	{
+		printf("\n[oss]: running simulation in verbose mode\n[oss]: ctrl-c to terminate\n");
+	} else {
+		printf("\n[oss]: running simulation\n[oss]: ctrl-c to terminate\n");	
+	}
 
 	while(1)
 	{
@@ -183,8 +186,9 @@ void manager(int vbose)
 					overlay(seat);
 				}
 				acount++;
+				pcount = acount;
 					
-				if(lcount < 100000)
+				if(lcount < 100000 && vbose == 1)
 				{
 					lcount++;
 					fprintf(outlog, "\n[oss]: [spawn process]     -> [pid: %i] [time: %is:%ins]", cpid, smseg->smtime.secs, smseg->smtime.nans);
@@ -383,7 +387,7 @@ void manager(int vbose)
 						if(lcount < 100000 && vbose == 1)
 						{
 							lcount++;
-							fprintf(outlog, "\n\n\tResource Graph\n\t-------- -----\n");
+							fprintf(outlog, "\n\n\tReleased Resources\n\t-------- ---------\n");
 						}
 					}
 
@@ -399,13 +403,18 @@ void manager(int vbose)
 									if(lcount < 100000 && vbose == 1)
 									{
 										lcount++;
-										fprintf(outlog, "r%i ", iterat);
+										fprintf(outlog, "\tr%i ", iterat);
 									}
 								}
 							}
 						}
 						smseg->resourceclass[iterat].allocator[termpid - 1] = 0;
 						smseg->resourceclass[iterat].request[termpid - 1] = 0;
+					}
+
+					if(lcount < 100000 && vbose == 1)
+					{
+						fprintf(outlog, "\n");
 					}
 
 					acount--;
@@ -449,7 +458,8 @@ void manager(int vbose)
 					fprintf(outlog, "\n\n\tResource Graph\n\t-------- -----\n");
 				}
 			}
-			fprintf(outlog, "\n\n");	
+			fprintf(outlog, "\n\n");
+			fprintf(outlog, "     [r1]  [r2]  [r3]  [r4]  [r5]  [r6]  [r7]  [r8]  [r9]  [r10] [r11] [r12] [r13] [r14] [r15] [r16] [r17] [r18] [r19] [r20]\n");	
 			for(x = 0; x < 18; x++)
 			{
 				if(plist[x] == 1)
@@ -464,7 +474,7 @@ void manager(int vbose)
 
 						for(y = 0; y < 20; y++)
 						{
-							fprintf(outlog, "%i ", smseg->resourceclass[y].allocator[x]);
+							fprintf(outlog, "%i     ", smseg->resourceclass[y].allocator[x]);
 						}
 						fprintf(outlog, "\n");	
 				}
@@ -479,10 +489,12 @@ void manager(int vbose)
 	while((waitpid = wait(&status)) > 0);
 
 	fprintf(outlog, "\n\n\tTracked Statistics\n\t------- ----------\n");
-	fprintf(outlog,"Number of requests granted: [%d]\n", grantedresource);
-	fprintf(outlog,"Number of deadlock detection runs: [%d]\n", deadlockdetectcount);
-	fprintf(outlog,"Total processes terminated by deadlock: [%d]\n", deadlocktermination);
-	fprintf(outlog,"Total processes terminated eventually: [%d]\n", eventualprocesstermination);
+	fprintf(outlog, "\tNumber of requests granted: [%i]\n", grantedresource);
+	fprintf(outlog, "\tNumber of deadlock detection runs: [%i]\n", deadlockdetectcount);
+	fprintf(outlog, "\tTotal processes terminated by deadlock: [%i]\n", deadlocktermination);
+	fprintf(outlog, "\tTotal processes terminated eventually: [%i]\n", eventualprocesstermination);
+	float deadlocktermper = deadlockdetectcount / deadlocktermination;
+	fprintf(outlog, "\tPercentage of processes terminated in deadlock: [%f percent]\n", deadlocktermper);
 }
 /* END ================================================================= */
 
@@ -568,23 +580,6 @@ int resourceallocator(int resid, int proc)
 /* END ================================================================= */
 
 
-/* LOCATES PID ========================================================= */
-/* ===================================================================== */
-// int findapid(int ptotheid)
-// {
-// 	int searcher;
-// 	for(searcher = 0; searcher < pcap; searcher++)
-// 	{
-// 		if(smseg->pct[searcher].pid == ptotheid)
-// 		{
-// 			return searcher;
-// 		}
-// 	}
-// 	return -1;
-// }
-/* END ================================================================= */
-
-
 /* INITIALIZE PCB FOR PROCESS ========================================== */
 /* ===================================================================== */
 int findaseat()
@@ -634,23 +629,6 @@ void overlay(int id)
 /* END ================================================================= */
 
 
-/* COMAPRES SYSTEM TIME WITH PROCESS LAUNCH TIME  ====================== */
-/* ===================================================================== */
-int timecomparison(simclock * khronone, simclock * khrontwo)
-{
-	long khrononetemp = ((long)(khronone->secs) * (long)1000000000) + (long)(khronone->nans);
-	long khrontwotemp = ((long)(khrontwo->secs) * (long)1000000000) + (long)(khrontwo->nans);
-
-	if(khrononetemp > khrontwotemp)
-	{
-		return 1;
-	} else {
-		return 0;
-	}
-}
-/* END ================================================================= */
-
-
 /* ADDS TIME BASED ON SECONDS AND NANOSECONDS ========================== */
 /* ===================================================================== */
 void clockinc(simclock* khronos, int sec, int nan)
@@ -662,21 +640,6 @@ void clockinc(simclock* khronos, int sec, int nan)
 		khronos->nans -= 1000000000;
 		(khronos->secs)++;
 	}
-}
-/* END ================================================================= */
-
-
-/* ADDS TIME BASED ON DURATION ========================================= */
-/* ===================================================================== */
-void timeinc(simclock* khronos, int duration)
-{
-	int temp = khronos->nans + duration;
-	while(temp >= 1000000000)
-	{
-		temp -= 1000000000;
-		(khronos->secs)++;
-	}
-	khronos->nans = temp;
 }
 /* END ================================================================= */
 
@@ -720,19 +683,6 @@ void resinit()
 		smseg->resourceclass[dropzone].shareable = 0;
 	}
 }
-/* END ================================================================= */
-
-
-/* INITIATES PROCESS BLOCK ============================================= */
-/* ===================================================================== */
-// void pcbinit()
-// {
-// 	int pc;
-// 	for(pc = 0; pc < pcap; pc++)
-// 	{
-// 		smseg->pct[pc].pid = -1;
-// 	}
-// }
 /* END ================================================================= */
 
 
@@ -804,7 +754,7 @@ void shminit()
 /* ===================================================================== */
 void killtime(int sig, siginfo_t *sainfo, void *ptr)
 {
-	char msgtime[] = "\noss: exit: computation exceeded 2 seconds\n";
+	char msgtime[] = "\n[oss]: exit: simulation terminated after 10s run.\n\nrefer to log.txt for results.\n\n";
 	int msglentime = sizeof(msgtime);
 
 	write(STDERR_FILENO, msgtime, msglentime);
@@ -820,6 +770,15 @@ void killtime(int sig, siginfo_t *sainfo, void *ptr)
 	// 		}
 	// 	}
 	// }
+
+
+	fprintf(outlog, "\n\n\tTracked Statistics\n\t------- ----------\n");
+	fprintf(outlog, "\tNumber of requests granted: [%i]\n", grantedresource);
+	fprintf(outlog, "\tNumber of deadlock detection runs: [%i]\n", deadlockdetectcount);
+	fprintf(outlog, "\tTotal processes terminated by deadlock: [%i]\n", deadlocktermination);
+	fprintf(outlog, "\tTotal processes terminated eventually: [%i]\n", eventualprocesstermination);
+	float deadlocktermper = deadlockdetectcount / deadlocktermination;
+	fprintf(outlog, "\tPercentage of processes terminated in deadlock: [%f percent]\n", deadlocktermper);
 
 	fclose(outlog);
 	//shmdt(smseg);
@@ -838,7 +797,7 @@ void killtime(int sig, siginfo_t *sainfo, void *ptr)
 /* ===================================================================== */
 void killctrl(int sig, siginfo_t *sainfo, void *ptr)
 {
-	char msgctrl[] = "\noss: exit: received ctrl-c interrupt signal\n";
+	char msgctrl[] = "\n[oss]: exit: received ctrl-c interrupt signal\n\nrefer to log.txt for results.\n\n";
 	int msglenctrl = sizeof(msgctrl);
 
 	write(STDERR_FILENO, msgctrl, msglenctrl);
@@ -854,6 +813,14 @@ void killctrl(int sig, siginfo_t *sainfo, void *ptr)
 	// 		}
 	// 	}
 	// }
+
+	fprintf(outlog, "\n\n\tTracked Statistics\n\t------- ----------\n");
+	fprintf(outlog, "\tNumber of requests granted: [%i]\n", grantedresource);
+	fprintf(outlog, "\tNumber of deadlock detection runs: [%i]\n", deadlockdetectcount);
+	fprintf(outlog, "\tTotal processes terminated by deadlock: [%i]\n", deadlocktermination);
+	fprintf(outlog, "\tTotal processes terminated eventually: [%i]\n", eventualprocesstermination);
+	double deadlocktermper = deadlockdetectcount / deadlocktermination;
+	fprintf(outlog, "\tPercentage of processes terminated in deadlock: [%f percent]\n", deadlocktermper);
 
 	fclose(outlog);
 	//shmdt(smseg);
@@ -873,7 +840,7 @@ void killctrl(int sig, siginfo_t *sainfo, void *ptr)
 static int satimer()
 {
 	struct itimerval t;
-	t.it_value.tv_sec = 2;
+	t.it_value.tv_sec = 10;
 	t.it_value.tv_usec = 0;
 	t.it_interval.tv_sec = 0;
 	t.it_interval.tv_usec = 0;
